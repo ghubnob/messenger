@@ -12,6 +12,7 @@
 #include <QStandardItemModel>
 #include <QCryptographicHash>
 #include <QSqlQuery>
+#include <QDir>
 
 chatwin::chatwin(QWidget *parent)
     : QDialog(parent)
@@ -31,13 +32,13 @@ chatwin::chatwin(QWidget *parent)
 
 chatwin::~chatwin()
 {
-    db.close(); // Закрываем подключение к базе данных при удалении объекта
+    db.close();
     delete ui;
 }
 
 void chatwin::changeChatLabel(QString &text) {
     ui->label->setText(text);
-    setupDatabase(); // Переносим вызов setupDatabase сюда
+    setupDatabase();
     loadMessagesFromDatabase();
 }
 
@@ -177,10 +178,11 @@ void chatwin::keyPressEvent(QKeyEvent *event) {
 }
 
 void chatwin::setupDatabase() {
+
+
     if (QSqlDatabase::contains("qt_sql_default_connection")) {
         QSqlDatabase::database().close();
         QSqlDatabase::removeDatabase("qt_sql_default_connection");
-        // QSqlDatabase::removeDatabase();
     }
 
     db = QSqlDatabase::addDatabase("QSQLITE");
@@ -211,4 +213,9 @@ void chatwin::messagesToDatabaseSave() {
 
 void chatwin::onClosed() {
     messagesToDatabaseSave();
+    QSqlDatabase::removeDatabase("qt_sql_default_connection");
+    if (model->rowCount()==0) {
+        QString filePath = QDir::currentPath()+"/"+ui->label->text()+".db";
+        QFile::remove(filePath);
+    } else setupDatabase();
 }

@@ -53,7 +53,6 @@ void MainWindow::loadDialogs()
     QStringList filters;
     filters << "*.db";
     dir.setNameFilters(filters);
-
     QStringList dbFiles = dir.entryList();
     foreach (QString dbFile, dbFiles) {
         QString suitableSender = dbFile;
@@ -64,7 +63,6 @@ void MainWindow::loadDialogs()
         model->appendRow(item);
     }
 }
-
 
 void MainWindow::setupListView() {
     ui->listView->setModel(model);
