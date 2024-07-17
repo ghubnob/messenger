@@ -30,8 +30,9 @@ private slots:
     void showContextMenu(const QPoint &pos);
     void deleteMessage();
     void editMessage();
-
+    void onItemClicked(const QModelIndex &index);
     void on_testbutton_sender_clicked();
+    void on_picbutton_clicked();
 
 private:
     Ui::chatwin *ui;
@@ -43,7 +44,7 @@ private:
 
     void setupUi();
     void setupListView();
-    void saveMessageToDatabase(const QString &sender, const QString &time, const QString &text);
+    void saveMessageToDatabase(const QStandardItem *item);
     void messagesToDatabaseSave();
     void loadMessagesFromDatabase();
     void setupDatabase();

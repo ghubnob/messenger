@@ -5,8 +5,6 @@
 #include <QListView>
 #include <QStandardItemModel>
 #include <QMenu>
-#include <QtSql/QSqlDatabase>
-#include <QtSql/QSqlQuery>
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -33,7 +31,6 @@ private:
     Ui::MainWindow *ui;
     QStandardItemModel *model;
     QMenu *contextMenu;
-    QSqlDatabase db;
 
     void setupListView();
     void loadDialogs();

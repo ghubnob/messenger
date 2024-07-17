@@ -31,8 +31,21 @@ MainWindow::~MainWindow()
 
 void MainWindow::on_pushButton_clicked()
 {
-    ui->delDialogLabel->setText("");
     QString sender = ui->lineEdit->text();
+    bool modelexists = false;
+    for (int i = 0; i < model->rowCount(); ++i) {
+        QStandardItem *item = model->item(i);
+        if (item->data(Qt::UserRole).toString() == sender) {
+            modelexists = true;
+            break;
+        }
+    }
+    if (!modelexists) {
+        QStandardItem *item = new QStandardItem(sender);
+        item->setData(sender, Qt::UserRole);
+        item->setFlags(item->flags() & ~Qt::ItemIsEditable);
+        model->appendRow(item);
+    }
     chatwin *chat = new chatwin();
     QString wintitle = QString("Chatting with %1").arg(sender);
     chat->changeChatLabel(sender);
@@ -94,15 +107,14 @@ void MainWindow::deleteDialog()
         QSqlDatabase::removeDatabase("qt_sql_default_connection");
         QString filePath = QDir::currentPath()+"/"+model->data(index,Qt::DisplayRole).toString()+".db";
         if (QFile::remove(filePath)) {
-            ui->delDialogLabel->setText("dialog deleted");
-        } else QMessageBox::warning(this,"Messenger Error","error deleteng the dialog. try opening another dialog and then deleting this one");
+            statusBar()->showMessage("dialog deleted",2000);
+        } else QMessageBox::warning(this,"Messenger Error","error deleteng the dialog.");
         model->clear();
         loadDialogs();
     }
 }
 
 void MainWindow::openDialogFromList() {
-    ui->delDialogLabel->setText("");
     QModelIndex index = ui->listView->currentIndex();
     if (index.isValid()) {
         QString sender = model->data(index, Qt::DisplayRole).toString();
@@ -115,6 +127,8 @@ void MainWindow::openDialogFromList() {
         chat->show();
         chat->exec();
         if (chat->close()) chat->onClosed();
+        model->clear();
+        loadDialogs();
     }
 }
 

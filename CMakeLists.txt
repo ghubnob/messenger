@@ -6,6 +6,11 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
+set(APP_ICON_RESOURCE_WINDOWS "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
+if(WIN32)
+    set(APP_ICON_RESOURCE ${APP_ICON_RESOURCE_WINDOWS})
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -25,6 +30,8 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         ${PROJECT_SOURCES}
         chatwin.h chatwin.cpp chatwin.ui
         HtmlDelegate.h
+        resources.rc
+
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET minmes APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR

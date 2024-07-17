@@ -1,4 +1,5 @@
 #include "chatwin.h"
+#include "qbuffer.h"
 #include "qsqlerror.h"
 #include "ui_chatwin.h"
 #include <QMenu>
@@ -13,6 +14,7 @@
 #include <QCryptographicHash>
 #include <QSqlQuery>
 #include <QDir>
+#include <QFileDialog>
 
 chatwin::chatwin(QWidget *parent)
     : QDialog(parent)
@@ -28,6 +30,7 @@ chatwin::chatwin(QWidget *parent)
     connect(ui->msgline, &QLineEdit::returnPressed, this, [=]() {
         ui->pushButton->setDefault(true);
     });
+
 }
 
 chatwin::~chatwin()
@@ -54,11 +57,12 @@ void chatwin::setupListView() {
     listView->setModel(model);
     listView->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(listView, &QListView::customContextMenuRequested, this, &chatwin::showContextMenu);
+    connect(listView, &QListView::doubleClicked, this, &chatwin::onItemClicked);
     QFont font = listView->font();
     font.setPointSize(10);
     listView->setFont(font);
-    listView->setMaximumHeight(511);
-    listView->setMaximumWidth(341);
+    listView->setMaximumHeight(541);
+    listView->setMaximumWidth(501);
 }
 
 void chatwin::showContextMenu(const QPoint &pos)
@@ -67,13 +71,18 @@ void chatwin::showContextMenu(const QPoint &pos)
     if (!index.isValid()) return;
     contextMenu = new QMenu(this);
     QAction *deleteAction = new QAction("Удалить сообщение", this);
-    connect(deleteAction, &QAction::triggered, this, &chatwin::deleteMessage);
-    contextMenu->addAction(deleteAction);
-    QString sender = model->data(index, Qt::UserRole).toString();
-    if (sender != ui->label->text()) {
-        QAction *editAction = new QAction("Изменить сообщение", this);
-        connect(editAction, &QAction::triggered, this, &chatwin::editMessage);
-        contextMenu->addAction(editAction);
+    if (model->data(index, Qt::DecorationRole).isValid()) {
+        connect(deleteAction, &QAction::triggered, this, &chatwin::deleteMessage);
+        contextMenu->addAction(deleteAction);
+    } else {
+        connect(deleteAction, &QAction::triggered, this, &chatwin::deleteMessage);
+        contextMenu->addAction(deleteAction);
+        QString sender = model->data(index, Qt::UserRole).toString();
+        if (sender != ui->label->text()) {
+            QAction *editAction = new QAction("Изменить сообщение", this);
+            connect(editAction, &QAction::triggered, this, &chatwin::editMessage);
+            contextMenu->addAction(editAction);
+        }
     }
     contextMenu->exec(listView->viewport()->mapToGlobal(pos));
 }
@@ -119,34 +128,34 @@ void chatwin::on_pushButton_clicked()
         item->setData(currentTime, Qt::UserRole + 1);
         item->setFlags(item->flags() & ~Qt::ItemIsEditable);
         model->appendRow(item);
-        saveMessageToDatabase(sender, currentTime, last_message);
+        saveMessageToDatabase(item);
         ui->msgline->setText("");
-    }
-}
-
-void chatwin::saveMessageToDatabase(const QString &sender, const QString &time, const QString &text)
-{
-    QSqlQuery query;
-    query.prepare("INSERT INTO messages (sender, time, text) VALUES (:sender, :time, :text)");
-    query.bindValue(":sender", sender);
-    query.bindValue(":time", time);
-    query.bindValue(":text", text);
-    if (!query.exec()) {
-        qDebug() << "save error" << query.lastError().text();
     }
 }
 
 void chatwin::loadMessagesFromDatabase()
 {
-    QSqlQuery query("SELECT sender, time, text FROM messages");
+    QSqlQuery query("SELECT sender, time, text, image FROM messages");
     while (query.next()) {
         QString sender = query.value(0).toString();
         QString time = query.value(1).toString();
         QString text = query.value(2).toString();
+        QByteArray imageData = query.value(3).toByteArray();
+
         QStandardItem *item = new QStandardItem();
-        item->setText(QString("%1, %2\n%3").arg(sender, time, text));
         item->setData(sender, Qt::UserRole);
         item->setData(time, Qt::UserRole + 1);
+
+        if (!imageData.isEmpty()) {
+            QPixmap pixmap;
+            pixmap.loadFromData(imageData);
+            QPixmap scaledPixmap = pixmap.scaled(250, 200, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            item->setData(scaledPixmap, Qt::DecorationRole);
+            item->setText(QString("%1, %2").arg(sender, time));
+        } else {
+            item->setText(QString("%1, %2\n%3").arg(sender, time, text));
+        }
+
         item->setFlags(item->flags() & ~Qt::ItemIsEditable);
         model->appendRow(item);
     }
@@ -163,7 +172,7 @@ void chatwin::on_testbutton_sender_clicked()
         item->setData(currentTime, Qt::UserRole + 1);
         item->setFlags(item->flags() & ~Qt::ItemIsEditable);
         model->appendRow(item);
-        saveMessageToDatabase(ui->label->text(), currentTime, last_message);
+        saveMessageToDatabase(item);
         ui->testmsgline->setText("");
     }
 }
@@ -178,8 +187,6 @@ void chatwin::keyPressEvent(QKeyEvent *event) {
 }
 
 void chatwin::setupDatabase() {
-
-
     if (QSqlDatabase::contains("qt_sql_default_connection")) {
         QSqlDatabase::database().close();
         QSqlDatabase::removeDatabase("qt_sql_default_connection");
@@ -196,26 +203,90 @@ void chatwin::setupDatabase() {
                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
                "sender TEXT, "
                "time TEXT, "
-               "text TEXT)");
+               "text TEXT, "
+               "image BLOB)");
 }
+
 
 void chatwin::messagesToDatabaseSave() {
     QSqlQuery query;
     query.exec("DELETE FROM messages");
     for (int i = 0; i < model->rowCount(); ++i) {
         QStandardItem *item = model->item(i);
-        QString sender = item->data(Qt::UserRole).toString();
-        QString time = item->data(Qt::UserRole + 1).toString();
-        QString text = item->text().split('\n').last();
-        saveMessageToDatabase(sender, time, text);
+        saveMessageToDatabase(item);
     }
 }
 
 void chatwin::onClosed() {
-    messagesToDatabaseSave();
-    QSqlDatabase::removeDatabase("qt_sql_default_connection");
     if (model->rowCount()==0) {
+        QSqlDatabase::database().close();
         QString filePath = QDir::currentPath()+"/"+ui->label->text()+".db";
         QFile::remove(filePath);
-    } else setupDatabase();
+    } else messagesToDatabaseSave();
+}
+
+void chatwin::on_picbutton_clicked()
+{
+    QString filePath = QFileDialog::getOpenFileName(this, tr("Выбрать изображение"), "", tr("Images (*.png *.xpm *.jpg)"));
+    if (!filePath.isEmpty()) {
+        QPixmap pixmap(filePath);
+        if (!pixmap.isNull()) {
+            QPixmap scaledPixmap = pixmap.scaled(250, 200, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            QStandardItem *item = new QStandardItem();
+            item->setData(QVariant(scaledPixmap), Qt::DecorationRole);
+            QString currentTime = QDateTime::currentDateTime().toString("hh:mm");
+            QString sender = "You";
+            item->setData(sender, Qt::UserRole);
+            item->setData(currentTime, Qt::UserRole + 1);
+            item->setText(QString("%1, %2").arg(sender, currentTime));
+            model->appendRow(item);
+        }
+    }
+}
+
+void chatwin::saveMessageToDatabase(const QStandardItem *item)
+{
+    QString sender = item->data(Qt::UserRole).toString();
+    QString time = item->data(Qt::UserRole + 1).toString();
+    QVariant decoration = item->data(Qt::DecorationRole);
+
+    QSqlQuery query;
+    if (decoration.isValid()) {
+        QPixmap pixmap = decoration.value<QPixmap>();
+        QByteArray byteArray;
+        QBuffer buffer(&byteArray);
+        pixmap.save(&buffer, "PNG");
+
+        query.prepare("INSERT INTO messages (sender, time, image) VALUES (:sender, :time, :image)");
+        query.bindValue(":sender", sender);
+        query.bindValue(":time", time);
+        query.bindValue(":image", byteArray);
+    } else {
+        QString text = item->text().split('\n').last();
+        query.prepare("INSERT INTO messages (sender, time, text) VALUES (:sender, :time, :text)");
+        query.bindValue(":sender", sender);
+        query.bindValue(":time", time);
+        query.bindValue(":text", text);
+    }
+
+    if (!query.exec()) {
+        qDebug() << "save message error" << query.lastError().text();
+    }
+}
+
+
+void chatwin::onItemClicked(const QModelIndex &index)
+{
+    if (!index.isValid()) return;
+    QVariant decoration = model->data(index, Qt::DecorationRole);
+    if (decoration.isValid()) {
+        QPixmap pixmap = decoration.value<QPixmap>();
+        if (!pixmap.isNull()) {
+            QLabel *imageLabel = new QLabel;
+            pixmap = pixmap.scaled(500, 400, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            imageLabel->setPixmap(pixmap);
+            imageLabel->setWindowFlags(Qt::Window);
+            imageLabel->show();
+        }
+    }
 }
