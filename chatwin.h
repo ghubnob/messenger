@@ -19,7 +19,7 @@ public:
     ~chatwin();
 
     void changeChatLabel(QString &text);
-    void changeNameLabel(QString &name);
+    void changeNameLabel(const QString &name);
     void onClosed();
 
 protected:

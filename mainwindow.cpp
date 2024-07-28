@@ -49,8 +49,7 @@ void MainWindow::on_pushButton_clicked()
     chatwin *chat = new chatwin();
     QString wintitle = QString("Chatting with %1").arg(sender);
     chat->changeChatLabel(sender);
-    QString username = ui->name->text();
-    chat->changeNameLabel(username);
+    chat->changeNameLabel(ui->name->text());
     chat->setWindowTitle(wintitle);
     chat->show();
     chat->exec();
@@ -118,11 +117,9 @@ void MainWindow::openDialogFromList() {
     QModelIndex index = ui->listView->currentIndex();
     if (index.isValid()) {
         QString sender = model->data(index, Qt::DisplayRole).toString();
-        QString username = ui->name->text();
         chatwin *chat = new chatwin();
         QString wintitle = QString("Chatting with %1").arg(sender);
         chat->changeChatLabel(sender);
-        chat->changeNameLabel(username);
         chat->setWindowTitle(wintitle);
         chat->show();
         chat->exec();

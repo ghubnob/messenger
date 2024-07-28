@@ -139,7 +139,8 @@ void chatwin::loadMessagesFromDatabase()
     while (query.next()) {
         QString sender = query.value(0).toString();
         QString time = query.value(1).toString();
-        QString text = query.value(2).toString();
+        QByteArray dbtext = query.value(2).toByteArray();
+        QString text = decryptMessage(dbtext,generateKey(sender)).toUtf8();
         QByteArray imageData = query.value(3).toByteArray();
 
         QStandardItem *item = new QStandardItem();
@@ -177,7 +178,7 @@ void chatwin::on_testbutton_sender_clicked()
     }
 }
 
-void chatwin::changeNameLabel(QString &name) {
+void chatwin::changeNameLabel(const QString &name) {
     ui->name->setText(name);
 }
 
@@ -203,7 +204,7 @@ void chatwin::setupDatabase() {
                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
                "sender TEXT, "
                "time TEXT, "
-               "text TEXT, "
+               "text BLOB, "
                "image BLOB)");
 }
 
@@ -249,7 +250,7 @@ void chatwin::saveMessageToDatabase(const QStandardItem *item)
     QString sender = item->data(Qt::UserRole).toString();
     QString time = item->data(Qt::UserRole + 1).toString();
     QVariant decoration = item->data(Qt::DecorationRole);
-
+    QByteArray userkey = generateKey(sender);
     QSqlQuery query;
     if (decoration.isValid()) {
         QPixmap pixmap = decoration.value<QPixmap>();
@@ -262,7 +263,7 @@ void chatwin::saveMessageToDatabase(const QStandardItem *item)
         query.bindValue(":time", time);
         query.bindValue(":image", byteArray);
     } else {
-        QString text = item->text().split('\n').last();
+        QByteArray text = encryptMessage(item->text().split('\n').last(), userkey).toBase64();
         query.prepare("INSERT INTO messages (sender, time, text) VALUES (:sender, :time, :text)");
         query.bindValue(":sender", sender);
         query.bindValue(":time", time);
@@ -289,4 +290,29 @@ void chatwin::onItemClicked(const QModelIndex &index)
             imageLabel->show();
         }
     }
+}
+
+QByteArray chatwin::encryptMessage(const QString &message, const QByteArray &key)
+{
+    QByteArray data = message.toUtf8();
+    QByteArray encryptedData;
+    for (int i = 0; i < data.size(); ++i) {
+        encryptedData.append(data[i] ^ key[i+7 % key.size()]);
+    }
+    return encryptedData;
+}
+
+QString chatwin::decryptMessage(const QByteArray &encryptedMessage, const QByteArray &key)
+{
+    QByteArray data = QByteArray::fromBase64(encryptedMessage);
+    QByteArray decryptedData;
+    for (int i = 0; i < data.size(); ++i) {
+        decryptedData.append(data[i] ^ key[i+7 % key.size()]);
+    }
+    return QString::fromUtf8(decryptedData);
+}
+
+QByteArray chatwin::generateKey(const QString &userKey)
+{
+    return QCryptographicHash::hash(userKey.toUtf8(), QCryptographicHash::Sha256);
 }
